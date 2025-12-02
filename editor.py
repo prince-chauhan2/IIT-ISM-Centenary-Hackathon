@@ -1,6 +1,16 @@
 import json
 import os
-from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
+import sys
+
+# Try importing MoviePy
+try:
+    from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
+except ImportError:
+    try:
+        from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
+    except ImportError:
+        print("❌ Error: MoviePy is not installed. Run: pip install \"moviepy<2.0\"")
+        sys.exit(1)
 
 # --- CONFIGURATION ---
 INPUT_FILE = "video_plan.json"
