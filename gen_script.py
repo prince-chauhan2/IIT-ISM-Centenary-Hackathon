@@ -10,6 +10,7 @@ OUTPUT_FILE = "video_plan.json"
 
 # List of all possible model names to try (in order of preference)
 MODEL_CANDIDATES = [
+    "gemini-2.5-pro",
     "gemini-1.5-flash",
     "gemini-1.5-flash-latest",
     "gemini-1.5-flash-001",
@@ -70,7 +71,7 @@ def main():
             break
         except Exception as e:
             print("❌ Failed")
-            # print(e) # Uncomment to see exact error
+            print(e) # Uncomment to see exact error
 
     if not working_model:
         print("\n❌ CRITICAL: No working models found. Check your API Key or Region.")
