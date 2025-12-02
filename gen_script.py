@@ -1,93 +1,100 @@
 import json
 import os
 import google.generativeai as genai
+from dotenv import load_dotenv
 
-
-GEMINI_API_KEY = "AIzaSyDbYm1zKV4Eiu7_61nbVfYC-tj7BcNT2Y4"
-
-INPUT_FILE = "filtered_data.json"
+# --- CONFIGURATION ---
+load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OUTPUT_FILE = "video_plan.json"
 
-def create_prompt(data):
-    """
-    Creates a prompt for Gemini to generate the script.
-    """
-    # We take the first 20 facts to ensure we cover enough history
-    facts = [item['content'] for item in data[:20]]
-    context = "\n".join(facts)
+# List of all possible model names to try (in order of preference)
+MODEL_CANDIDATES = [
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash-001",
+    "gemini-1.0-pro",
+    "gemini-1.0-pro-latest",
+    "gemini-pro",
+    "gemini-1.5-pro"
+]
 
-    prompt = f"""
-    You are a documentary director creating a short video about the 'Legacy of IIT (ISM) Dhanbad'.
+def create_prompt():
+    return """
+    You are a documentary director creating a script for: "The Centenary of IIT (ISM) Dhanbad".
+    CRITICAL CONSTRAINT: The video must be exactly 2 minutes (approx 8 segments).
     
-    Here is the raw data extracted from the archives:
-    {context}
+    THEME TRANSITION:
+    - START (1926): Dark, Coal Black, Vintage Monochrome.
+    - END (2026): Vibrant Red, Fire/Energy.
+    
+    MANDATORY TIMELINE:
+    1. 1926: Founding, Lord Irwin, British Architecture (Black/White).
+    2. 1957: Expansion to ISM.
+    3. 1976: Golden Jubilee, Indira Gandhi.
+    4. 2016: IIT Status.
+    5. 2026: Centenary Celebration (Glowing Red).
 
-    INSTRUCTIONS:
-    1. Create a compelling 5-segment script based ONLY on this data.
-    2. Each segment must have a 'narration' (voiceover text) and an 'image_prompt' (for AI image generation).
-    3. The 'image_prompt' must be descriptive (e.g., "Black and white photo of...", "Modern drone shot of...").
-    4. Output strictly valid JSON format.
-
-    JSON STRUCTURE:
-    {{
+    OUTPUT JSON FORMAT:
+    {
         "segments": [
-            {{
+            {
                 "id": 1,
-                "narration": "Text...",
-                "image_prompt": "Prompt..."
-            }}
+                "narration": "In the land of black gold...",
+                "image_prompt": "Vintage 1926 photograph, British colonial architecture, grainy black and white style"
+            }
         ]
-    }}
+    }
     """
-    return prompt
 
 def main():
-    if not os.path.exists(INPUT_FILE):
-        print(f"Error: {INPUT_FILE} not found. Did you run data_loader.py?")
+    if not GEMINI_API_KEY:
+        print("❌ Error: GEMINI_API_KEY not found in .env")
         return
 
-    # 1. Configure Gemini
     genai.configure(api_key=GEMINI_API_KEY)
     
-    # Use 'gemini-1.5-flash' for speed/efficiency, or 'gemini-pro'
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    working_model = None
 
-    # 2. Load Data
-    print("Loading filtered data...")
-    with open(INPUT_FILE, 'r') as f:
-        data = json.load(f)
+    print("🔍 Testing models to find one that works for you...")
+    
+    # LOOP to find a working model
+    for model_name in MODEL_CANDIDATES:
+        try:
+            print(f"   Trying: {model_name}...", end=" ")
+            model = genai.GenerativeModel(model_name)
+            # Send a tiny test prompt
+            model.generate_content("test")
+            print("✅ WORKS!")
+            working_model = model
+            break
+        except Exception as e:
+            print("❌ Failed")
+            # print(e) # Uncomment to see exact error
 
-    if not data:
-        print("No data found! Check your data_loader script.")
+    if not working_model:
+        print("\n❌ CRITICAL: No working models found. Check your API Key or Region.")
         return
 
-    # 3. Generate Content
-    print("Asking Gemini to write the script...")
-    prompt = create_prompt(data)
-    
+    print("\n🔥 Generating Script...")
     try:
-        response = model.generate_content(prompt)
-        content = response.text
-
-        # 4. Clean formatting (Gemini often adds ```json ... ``` blocks)
-        if "```" in content:
-            content = content.replace("```json", "").replace("```", "").strip()
-
-        # 5. Save Result
-        script_json = json.loads(content)
+        response = working_model.generate_content(create_prompt())
+        content = response.text.replace("```json", "").replace("```", "").strip()
         
+        # JSON Cleaning
+        start = content.find('{')
+        end = content.rfind('}') + 1
+        if start != -1 and end != -1:
+            content = content[start:end]
+
+        script_json = json.loads(content)
         with open(OUTPUT_FILE, 'w') as f:
             json.dump(script_json, f, indent=4)
             
-        print(f"Success! Video plan saved to {OUTPUT_FILE}")
-        print("Preview of Segment 1:")
-        print(script_json['segments'][0])
-
+        print(f"🎉 SUCCESS! Script saved to {OUTPUT_FILE}")
+        
     except Exception as e:
-        print(f"An error occurred: {e}")
-        # Debugging: print raw response if JSON fails
-        if 'content' in locals():
-            print("Raw output was:", content)
+        print(f"❌ Error during generation: {e}")
 
 if __name__ == "__main__":
     main()
